@@ -1,0 +1,122 @@
+{
+  "$id": "https://vimson999.github.io/video-renderer/timeline.schema.json",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "shots"
+  ],
+  "properties": {
+    "shots": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "startMs",
+          "endMs",
+          "asset",
+          "fit",
+          "motion",
+          "transitionOut"
+        ],
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "startMs": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "endMs": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "asset": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "fit": {
+            "anyOf": [
+              {
+                "const": "cover",
+                "type": "string"
+              },
+              {
+                "const": "contain",
+                "type": "string"
+              }
+            ]
+          },
+          "motion": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "preset",
+              "intensity"
+            ],
+            "properties": {
+              "preset": {
+                "anyOf": [
+                  {
+                    "const": "none",
+                    "type": "string"
+                  },
+                  {
+                    "const": "slow-zoom-in",
+                    "type": "string"
+                  },
+                  {
+                    "const": "slow-zoom-out",
+                    "type": "string"
+                  },
+                  {
+                    "const": "pan-left",
+                    "type": "string"
+                  },
+                  {
+                    "const": "pan-right",
+                    "type": "string"
+                  }
+                ]
+              },
+              "intensity": {
+                "minimum": 0,
+                "maximum": 1,
+                "type": "number"
+              }
+            }
+          },
+          "transitionOut": {
+            "additionalProperties": false,
+            "type": "object",
+            "required": [
+              "type",
+              "durationMs"
+            ],
+            "properties": {
+              "type": {
+                "anyOf": [
+                  {
+                    "const": "cut",
+                    "type": "string"
+                  },
+                  {
+                    "const": "crossfade",
+                    "type": "string"
+                  }
+                ]
+              },
+              "durationMs": {
+                "minimum": 0,
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

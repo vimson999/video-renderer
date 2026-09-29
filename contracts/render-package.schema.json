@@ -1,0 +1,64 @@
+{
+  "$id": "https://vimson999.github.io/video-renderer/render-package.schema.json",
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "channelId",
+    "videoId",
+    "runId",
+    "profile",
+    "width",
+    "height",
+    "fps",
+    "timeline",
+    "audio",
+    "subtitles"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0",
+      "type": "string"
+    },
+    "channelId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "videoId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "runId": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "profile": {
+      "const": "vertical-basic",
+      "type": "string"
+    },
+    "width": {
+      "const": 1080,
+      "type": "number"
+    },
+    "height": {
+      "const": 1920,
+      "type": "number"
+    },
+    "fps": {
+      "const": 30,
+      "type": "number"
+    },
+    "timeline": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "audio": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "subtitles": {
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}
