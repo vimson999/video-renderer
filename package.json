@@ -1,0 +1,34 @@
+{
+  "name": "@vimson/video-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contract-first local Remotion renderer for portable video packages",
+  "type": "module",
+  "bin": {
+    "video-renderer": "./dist/src/index.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "cli": "tsx src/index.ts",
+    "schemas": "tsx src/contracts/export-schemas.ts"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.529",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.529"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
