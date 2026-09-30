@@ -74,6 +74,7 @@ export const createPackageFixture = async (options?: {
   manifest?: JsonObject;
   timeline?: JsonObject;
   durationMs?: number;
+  asset?: Uint8Array;
 }): Promise<PackageFixture> => {
   const durationMs = options?.durationMs ?? 1_000;
   const root = await mkdtemp(join(tmpdir(), 'video-renderer-package-'));
@@ -92,7 +93,7 @@ export const createPackageFixture = async (options?: {
       join(root, 'subtitle.srt'),
       `1\n00:00:00,000 --> 00:00:${String(Math.floor(durationMs / 1_000)).padStart(2, '0')},${String(durationMs % 1_000).padStart(3, '0')}\n示例字幕\n`,
     ),
-    writeFile(join(root, 'assets/shot-001.png'), onePixelPng),
+    writeFile(join(root, 'assets/shot-001.png'), options?.asset ?? onePixelPng),
   ]);
 
   return {
