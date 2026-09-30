@@ -5,6 +5,7 @@ import type {
 } from './types.js';
 
 export type RendererErrorKind =
+  | 'internal'
   | 'validation'
   | 'lock'
   | 'media'

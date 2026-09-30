@@ -1,4 +1,4 @@
-import {mkdtemp, readFile, rm, stat} from 'node:fs/promises';
+import {mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
@@ -7,6 +7,7 @@ import {afterEach, describe, expect, it} from 'vitest';
 import {compilePackage} from '../../src/compiler/compile-package.js';
 import {prepareJobWorkspace} from '../../src/jobs/workspace.js';
 import {probeRenderedVideo} from '../../src/render/media-report.js';
+import {hashInputPackage} from '../../src/render/reports.js';
 import {renderJob} from '../../src/render/renderer.js';
 import {validatePackage} from '../../src/validation/validate-package.js';
 import {createPackageFixture, validTimeline} from '../fixtures.js';
@@ -87,4 +88,23 @@ describe('renderJob', () => {
 
     await expect(stat(join(job.outputDir, 'rough-cut.mp4'))).rejects.toMatchObject({code: 'ENOENT'});
   });
+
+  it('renders from the staged snapshot when the source package changes afterward', async () => {
+    const job = await prepareThreeSecondJob();
+    const stagedHash = job.workspace.inputPackageSha256;
+    await writeFile(join(job.fixture.root, 'subtitle.srt'), 'mutated after staging');
+
+    const result = await renderJob({
+      inputDir: job.fixture.root,
+      outputDir: job.outputDir,
+      workspace: job.workspace,
+      compiled: job.compiled,
+      validationReport: job.validated.report,
+      warnings: job.validated.warnings,
+      concurrency: 1,
+    });
+
+    expect(result.report.inputPackageSha256).toBe(stagedHash);
+    expect(await hashInputPackage(job.fixture.root)).not.toBe(stagedHash);
+  }, 120_000);
 });

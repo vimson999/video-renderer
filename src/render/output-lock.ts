@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {hostname} from 'node:os';
 import {
   lstat,
+  mkdir,
   open,
   readFile,
   readdir,
@@ -117,12 +118,74 @@ const existingLockCanBeReclaimed = async (lockPath: string): Promise<boolean> =>
   return !processIsAliveOrUnverifiable(owner.pid);
 };
 
+const lockExists = async (lockPath: string): Promise<boolean> => {
+  try {
+    await lstat(lockPath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
+};
+
+const createOwnedLock = async (
+  lockPath: string,
+  outputDir: string,
+  owner: LockOwner,
+): Promise<OutputLock> => {
+  const handle = await open(lockPath, 'wx', 0o600);
+  try {
+    await handle.writeFile(`${JSON.stringify(owner)}\n`, 'utf8');
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+
+  let released = false;
+  const release = async (): Promise<void> => {
+    if (released) {
+      return;
+    }
+    released = true;
+    const current = await readOwner(lockPath);
+    if (current?.token === owner.token) {
+      await unlink(lockPath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') {
+          throw error;
+        }
+      });
+    }
+  };
+
+  try {
+    await assertOutputIsAbsentOrEmpty(outputDir);
+  } catch (error) {
+    await release();
+    throw error;
+  }
+  return {path: lockPath, outputDir, owner, release};
+};
+
 export const acquireOutputLock = async (
   requestedOutputDir: string,
   options: OutputLockOptions,
 ): Promise<OutputLock> => {
-  const outputDir = await canonicalizeProspectivePath(requestedOutputDir);
+  const prospectiveOutput = await canonicalizeProspectivePath(requestedOutputDir);
+  try {
+    await mkdir(dirname(prospectiveOutput), {recursive: true});
+  } catch (cause) {
+    throw new RendererError({
+      kind: 'output',
+      exitCode: 3,
+      message: `Could not create output parent directory: ${dirname(prospectiveOutput)}`,
+      cause,
+    });
+  }
+  const outputDir = await canonicalizeProspectivePath(prospectiveOutput);
   const lockPath = await getOutputLockPath(outputDir);
+  const recoveryPath = `${lockPath}.recovery`;
   const owner: LockOwner = {
     pid: process.pid,
     jobId: options.jobId,
@@ -131,54 +194,46 @@ export const acquireOutputLock = async (
     token: randomUUID(),
   };
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const handle = await open(lockPath, 'wx', 0o600);
-      try {
-        await handle.writeFile(`${JSON.stringify(owner)}\n`, 'utf8');
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
+  try {
+    return await createOwnedLock(lockPath, outputDir, owner);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+      throw error;
+    }
+  }
 
-      let released = false;
-      const release = async (): Promise<void> => {
-        if (released) {
-          return;
-        }
-        released = true;
-        const current = await readOwner(lockPath);
-        if (current?.token === owner.token) {
-          await unlink(lockPath).catch((error: NodeJS.ErrnoException) => {
-            if (error.code !== 'ENOENT') {
-              throw error;
-            }
-          });
-        }
-      };
-
-      try {
-        await assertOutputIsAbsentOrEmpty(outputDir);
-      } catch (error) {
-        await release();
-        throw error;
-      }
-      return {path: lockPath, outputDir, owner, release};
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-        throw error;
-      }
+  let recoveryHandle;
+  try {
+    recoveryHandle = await open(recoveryPath, 'wx', 0o600);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw lockConflict(`Output lock recovery is already in progress: ${outputDir}`);
+    }
+    throw error;
+  }
+  try {
+    await recoveryHandle.writeFile(`${JSON.stringify(owner)}\n`, 'utf8');
+    await recoveryHandle.sync();
+    if (await lockExists(lockPath)) {
       if (!(await existingLockCanBeReclaimed(lockPath))) {
         throw lockConflict(`Output directory is locked: ${outputDir}`);
       }
-      try {
-        await unlink(lockPath);
-      } catch (unlinkError) {
-        if ((unlinkError as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw lockConflict(`Could not reclaim output lock: ${lockPath}`);
-        }
-      }
+      await unlink(lockPath);
     }
+    try {
+      return await createOwnedLock(lockPath, outputDir, owner);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        throw lockConflict(`Output directory is locked: ${outputDir}`);
+      }
+      throw error;
+    }
+  } finally {
+    await recoveryHandle.close();
+    await unlink(recoveryPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    });
   }
-  throw lockConflict(`Could not acquire output lock after retries: ${outputDir}`);
 };

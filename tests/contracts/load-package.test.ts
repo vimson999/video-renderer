@@ -1,4 +1,4 @@
-import {mkdtemp, rm, symlink, writeFile} from 'node:fs/promises';
+import {mkdir, mkdtemp, rm, symlink, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 
@@ -62,9 +62,34 @@ describe('loadPackage', () => {
     ['fps', {...validManifest, fps: 24}],
   ])('rejects unsupported manifest %s', async (field, manifest) => {
     const created = await fixture({manifest});
-    await expectContractError(loadPackage(created.root), {
+    const error = await loadPackage(created.root).catch((caught: unknown) => caught);
+    await expectContractError(Promise.resolve(error), {
       file: 'manifest.json',
       field: `/${field}`,
+    });
+    expect(error).toMatchObject({
+      identity: {
+        channelId: 'channel-a',
+        videoId: 'video-a',
+        runId: 'run-a',
+      },
+    });
+  });
+
+  it('uses the manifest timeline path in schema diagnostics', async () => {
+    const created = await fixture({
+      manifest: {...validManifest, timeline: 'timeline/custom.json'},
+    });
+    await mkdir(join(created.root, 'timeline'));
+    await writeFile(
+      join(created.root, 'timeline/custom.json'),
+      JSON.stringify({shots: [{}]}),
+    );
+
+    const error = await loadPackage(created.root).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({kind: 'validation', exitCode: 2});
+    expect((error as RendererError).issues[0]).toMatchObject({
+      file: 'timeline/custom.json',
     });
   });
 

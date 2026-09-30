@@ -40,6 +40,7 @@ export type ShotLayerProps = {
   fit: Shot['fit'];
   motion: CompiledMotion;
   durationInFrames: number;
+  frameOverride?: number;
 };
 
 export const ShotLayer = ({
@@ -47,8 +48,10 @@ export const ShotLayer = ({
   fit,
   motion,
   durationInFrames,
+  frameOverride,
 }: ShotLayerProps) => {
-  const frame = useCurrentFrame();
+  const currentFrame = useCurrentFrame();
+  const frame = frameOverride ?? currentFrame;
   return (
     <Img
       src={staticFile(src)}

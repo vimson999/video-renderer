@@ -1,4 +1,4 @@
-import {access, mkdtemp, readFile, readdir, rm} from 'node:fs/promises';
+import {access, mkdtemp, readFile, readdir, rm, writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {join, relative} from 'node:path';
@@ -7,6 +7,7 @@ import {afterEach, describe, expect, it} from 'vitest';
 
 import {compilePackage, type CompiledVideoProps} from '../../src/compiler/compile-package.js';
 import {prepareJobWorkspace, type JobWorkspace} from '../../src/jobs/workspace.js';
+import {hashInputPackage} from '../../src/render/reports.js';
 import {validatePackage, type ValidatedPackage} from '../../src/validation/validate-package.js';
 import {
   createPackageFixture,
@@ -80,6 +81,7 @@ describe('prepareJobWorkspace', () => {
     expect(firstWorkspace.rootDir).not.toBe(secondWorkspace.rootDir);
     expect(firstWorkspace.publicDir).toBe(join(firstWorkspace.rootDir, 'public'));
     expect(firstWorkspace.propsFile).toBe(join(firstWorkspace.publicDir, 'compiled.json'));
+    expect(firstWorkspace.inputPackageSha256).toBe(await hashInputPackage(first.fixture.root));
 
     const firstProps = JSON.parse(await readFile(firstWorkspace.propsFile, 'utf8')) as CompiledVideoProps;
     const secondProps = JSON.parse(await readFile(secondWorkspace.propsFile, 'utf8')) as CompiledVideoProps;
@@ -99,6 +101,18 @@ describe('prepareJobWorkspace', () => {
       snapshotDirectory(first.fixture.root),
       snapshotDirectory(second.fixture.root),
     ])).toEqual(before);
+  });
+
+  it('keeps the render hash tied to the staged snapshot after source mutation', async () => {
+    const first = await makeInput('health-channel', 'run-snapshot');
+    const workspace = await prepareJobWorkspace(first.validated, first.compiled);
+    workspaces.push(workspace);
+    const snapshotHash = workspace.inputPackageSha256;
+
+    await writeFile(join(first.fixture.root, 'subtitle.srt'), 'changed after staging');
+
+    expect(workspace.inputPackageSha256).toBe(snapshotHash);
+    expect(await hashInputPackage(first.fixture.root)).not.toBe(snapshotHash);
   });
 
   it('cleans only its own job directory and cleanup is idempotent', async () => {

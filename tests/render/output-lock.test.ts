@@ -41,6 +41,16 @@ describe('acquireOutputLock', () => {
     await second.release();
   });
 
+  it('creates missing nested output parents before locking', async () => {
+    const root = await makeRoot();
+    const output = join(root, 'missing', 'nested', 'output');
+
+    const lock = await acquireOutputLock(output, {jobId: 'nested-output'});
+
+    expect(lock.outputDir).toContain(join('missing', 'nested', 'output'));
+    await lock.release();
+  });
+
   it('rejects a non-empty output directory with stable exit code 3', async () => {
     const root = await makeRoot();
     const output = join(root, 'output');
@@ -84,6 +94,26 @@ describe('acquireOutputLock', () => {
     const lock = await acquireOutputLock(output, {jobId: 'replacement'});
     expect(lock.path).toBe(lockPath);
     await lock.release();
+  });
+
+  it('allows exactly one winner when many contenders reclaim one stale lock', async () => {
+    const root = await makeRoot();
+    const output = join(root, 'output');
+    const lockPath = await getOutputLockPath(output);
+    await writeFile(lockPath, `${JSON.stringify({pid: 2_147_483_647, jobId: 'dead', createdAt: '2020-01-01T00:00:00.000Z'})}\n`);
+
+    const results = await Promise.allSettled(
+      Array.from({length: 10}, (_, index) =>
+        acquireOutputLock(output, {jobId: `contender-${index}`})
+      ),
+    );
+    const winners = results.filter(
+      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof acquireOutputLock>>> =>
+        result.status === 'fulfilled',
+    );
+    expect(winners).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(9);
+    await winners[0]!.value.release();
   });
 
   it('recovers after a lock-holding child process is interrupted', async () => {

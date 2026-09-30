@@ -11,7 +11,7 @@ import {
   type Manifest,
   type Timeline,
 } from './schema.js';
-import type {LoadedPackage, ValidationIssue} from './types.js';
+import type {LoadedPackage, RendererIdentity, ValidationIssue} from './types.js';
 
 const ajv = new Ajv2020({allErrors: true, strict: true});
 const validateManifest = ajv.compile(ManifestSchema) as ValidateFunction<Manifest>;
@@ -43,6 +43,25 @@ const readJson = async (path: string, displayName: string): Promise<unknown> => 
       repair: `Replace ${displayName} with valid UTF-8 JSON.`,
     }, cause);
   }
+};
+
+const identityFromValue = (value: unknown): RendererIdentity | undefined => {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.channelId !== 'string'
+    || typeof record.videoId !== 'string'
+    || typeof record.runId !== 'string'
+  ) {
+    return undefined;
+  }
+  return {
+    channelId: record.channelId,
+    videoId: record.videoId,
+    runId: record.runId,
+  };
 };
 
 const assertSchema = <T>(
@@ -99,11 +118,14 @@ export const loadPackage = async (inputDir: string): Promise<LoadedPackage> => {
   }
 
   const manifestPath = join(root, 'manifest.json');
-  const manifest = assertSchema(
-    await readJson(manifestPath, 'manifest.json'),
-    validateManifest,
-    'manifest.json',
-  );
+  const rawManifest = await readJson(manifestPath, 'manifest.json');
+  const manifestIdentity = identityFromValue(rawManifest);
+  let manifest: Manifest;
+  try {
+    manifest = assertSchema(rawManifest, validateManifest, 'manifest.json');
+  } catch (error) {
+    throw manifestIdentity ? attachIdentity(error, manifestIdentity) : error;
+  }
   const identity = {
     channelId: manifest.channelId,
     videoId: manifest.videoId,
@@ -119,7 +141,7 @@ export const loadPackage = async (inputDir: string): Promise<LoadedPackage> => {
     const timeline = assertSchema(
       await readJson(timelinePath, manifest.timeline),
       validateTimeline,
-      'timeline.json',
+      manifest.timeline,
     );
 
     const [audio, subtitles, assetEntries] = await Promise.all([
@@ -131,7 +153,7 @@ export const loadPackage = async (inputDir: string): Promise<LoadedPackage> => {
           await resolveReference(
             root,
             shot.asset,
-            'timeline.json',
+            manifest.timeline,
             `/shots/${index}/asset`,
             shot.id,
           ),

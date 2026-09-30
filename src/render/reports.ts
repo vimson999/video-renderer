@@ -1,13 +1,26 @@
 import {createHash} from 'node:crypto';
 import {createReadStream} from 'node:fs';
 import {readdir, readFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
 import {join, relative} from 'node:path';
 
 import type {RendererIdentity} from '../contracts/types.js';
 import type {ValidationReport} from '../validation/validate-package.js';
 import type {RenderedMediaMetadata} from './media-report.js';
 
-export const RENDERER_VERSION = '0.1.0' as const;
+const require = createRequire(import.meta.url);
+const loadRendererVersion = (): string => {
+  for (const packagePath of ['../../package.json', '../../../package.json']) {
+    try {
+      return (require(packagePath) as {version: string}).version;
+    } catch {
+      // The source and compiled module trees sit at different depths.
+    }
+  }
+  throw new Error('Could not locate the renderer package metadata.');
+};
+
+export const RENDERER_VERSION = loadRendererVersion();
 export const CONTRACT_VERSION = '1.0' as const;
 
 const listFiles = async (root: string, directory = root): Promise<string[]> => {

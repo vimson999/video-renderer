@@ -27,6 +27,7 @@ const IncomingPreview = ({preview}: {preview: CompiledIncomingPreview}) => {
         fit={preview.fit}
         motion={preview.motion}
         durationInFrames={preview.durationInFrames}
+        frameOverride={0}
       />
     </AbsoluteFill>
   );

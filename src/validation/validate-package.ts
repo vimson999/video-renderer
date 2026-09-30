@@ -37,6 +37,7 @@ export type ValidatedPackage = {
 };
 
 const issue = (
+  file: string,
   code: string,
   field: string,
   repair: string,
@@ -44,7 +45,7 @@ const issue = (
   cueIndex?: number,
 ): ValidationIssue => ({
   code,
-  file: field.startsWith('/shots') ? 'timeline.json' : 'subtitle.srt',
+  file,
   field,
   repair,
   ...(shotId === undefined ? {} : {shotId}),
@@ -55,12 +56,18 @@ const timelineIssues = (
   loaded: LoadedPackage,
   audioDurationMs: number,
 ): ValidationIssue[] => {
+  const timelineIssue = (
+    code: string,
+    field: string,
+    repair: string,
+    shotId?: string,
+  ): ValidationIssue => issue(loaded.manifest.timeline, code, field, repair, shotId);
   const issues: ValidationIssue[] = [];
   const seenIds = new Set<string>();
   const {shots} = loaded.timeline;
 
   if (shots[0]?.startMs !== 0) {
-    issues.push(issue(
+    issues.push(timelineIssue(
       'timeline.first_start',
       '/shots/0/startMs',
       'Set the first shot startMs to 0.',
@@ -71,7 +78,7 @@ const timelineIssues = (
   shots.forEach((shot, index) => {
     const base = `/shots/${index}`;
     if (seenIds.has(shot.id)) {
-      issues.push(issue(
+      issues.push(timelineIssue(
         'timeline.duplicate_id',
         `${base}/id`,
         'Give every shot a unique id.',
@@ -81,7 +88,7 @@ const timelineIssues = (
     seenIds.add(shot.id);
 
     if (shot.endMs <= shot.startMs) {
-      issues.push(issue(
+      issues.push(timelineIssue(
         'timeline.reversed',
         `${base}/endMs`,
         'Set endMs greater than startMs.',
@@ -91,14 +98,14 @@ const timelineIssues = (
 
     const previous = shots[index - 1];
     if (previous && shot.startMs > previous.endMs) {
-      issues.push(issue(
+      issues.push(timelineIssue(
         'timeline.gap',
         `${base}/startMs`,
         `Set startMs to the previous shot endMs (${previous.endMs}).`,
         shot.id,
       ));
     } else if (previous && shot.startMs < previous.endMs) {
-      issues.push(issue(
+      issues.push(timelineIssue(
         'timeline.overlap',
         `${base}/startMs`,
         `Set startMs to the previous shot endMs (${previous.endMs}).`,
@@ -109,7 +116,7 @@ const timelineIssues = (
     const next = shots[index + 1];
     if (!next) {
       if (shot.transitionOut.type !== 'cut' || shot.transitionOut.durationMs !== 0) {
-        issues.push(issue(
+        issues.push(timelineIssue(
           'transition.final',
           `${base}/transitionOut`,
           'Set the final shot transitionOut to cut with durationMs 0.',
@@ -118,7 +125,7 @@ const timelineIssues = (
       }
     } else if (shot.transitionOut.type === 'cut') {
       if (shot.transitionOut.durationMs !== 0) {
-        issues.push(issue(
+        issues.push(timelineIssue(
           'transition.cut_duration',
           `${base}/transitionOut/durationMs`,
           'Set a cut transition durationMs to 0.',
@@ -130,7 +137,7 @@ const timelineIssues = (
       const incomingDuration = next.endMs - next.startMs;
       const duration = shot.transitionOut.durationMs;
       if (duration <= 0 || duration >= outgoingDuration || duration > incomingDuration) {
-        issues.push(issue(
+        issues.push(timelineIssue(
           'transition.duration',
           `${base}/transitionOut/durationMs`,
           'Use a positive crossfade shorter than the outgoing shot and no longer than the incoming shot.',
@@ -142,7 +149,7 @@ const timelineIssues = (
 
   const finalEnd = shots.at(-1)?.endMs ?? 0;
   if (Math.abs(finalEnd - audioDurationMs) > 100) {
-    issues.push(issue(
+    issues.push(timelineIssue(
       'timeline.final_duration',
       `/shots/${Math.max(0, shots.length - 1)}/endMs`,
       `Set the final endMs within 100ms of narration duration ${audioDurationMs}ms.`,
@@ -160,7 +167,7 @@ const subtitleIssues = (
   captions.forEach((caption, index) => {
     const previous = captions[index - 1];
     if (previous && caption.startMs < previous.startMs) {
-      issues.push(issue(
+      issues.push(issue('subtitle.srt',
         'subtitle.order',
         `/cues/${index}/startMs`,
         'Order SRT cues by ascending start time.',
@@ -168,7 +175,7 @@ const subtitleIssues = (
         index,
       ));
     } else if (previous && caption.startMs < previous.endMs) {
-      issues.push(issue(
+      issues.push(issue('subtitle.srt',
         'subtitle.overlap',
         `/cues/${index}/startMs`,
         'End the previous cue before this cue starts.',
@@ -179,7 +186,7 @@ const subtitleIssues = (
   });
   const finalCue = captions.at(-1);
   if (finalCue && finalCue.endMs - audioDurationMs > 100) {
-    issues.push(issue(
+    issues.push(issue('subtitle.srt',
       'subtitle.duration',
       `/cues/${captions.length - 1}/endMs`,
       `End the final cue no more than 100ms after narration duration ${audioDurationMs}ms.`,

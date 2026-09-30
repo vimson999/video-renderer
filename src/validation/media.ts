@@ -1,8 +1,8 @@
 import {registerMediabunnyServer} from '@mediabunny/server';
-import {ALL_FORMATS, FilePathSource, Input} from 'mediabunny';
+import {ALL_FORMATS, FilePathSource, Input, WAVE} from 'mediabunny';
 import sharp from 'sharp';
 
-import {mediaError} from '../contracts/errors.js';
+import {mediaError, RendererError} from '../contracts/errors.js';
 
 registerMediabunnyServer();
 
@@ -21,6 +21,15 @@ export type ImageMetadata = {
 export const inspectNarration = async (path: string): Promise<AudioMetadata> => {
   const input = new Input({formats: ALL_FORMATS, source: new FilePathSource(path)});
   try {
+    const format = await input.getFormat();
+    if (format !== WAVE) {
+      throw mediaError('Narration must contain WAV audio.', {
+        code: 'media.audio_format',
+        file: path,
+        field: '/audio',
+        repair: 'Convert the narration content to a valid PCM WAV file.',
+      });
+    }
     const track = await input.getPrimaryAudioTrack();
     if (track === null) {
       throw new Error('The file has no audio track.');
@@ -39,6 +48,9 @@ export const inspectNarration = async (path: string): Promise<AudioMetadata> => 
       channelCount,
     };
   } catch (cause) {
+    if (cause instanceof RendererError) {
+      throw cause;
+    }
     throw mediaError('Could not decode narration audio.', {
       code: 'media.audio_unreadable',
       file: path,
@@ -56,12 +68,23 @@ export const inspectStill = async (path: string): Promise<ImageMetadata> => {
     if (!metadata.width || !metadata.height || !metadata.format) {
       throw new Error('Image metadata is incomplete.');
     }
+    if (metadata.format !== 'png' && metadata.format !== 'jpeg') {
+      throw mediaError('Still image must contain PNG or JPEG data.', {
+        code: 'media.image_format',
+        file: path,
+        field: '/asset',
+        repair: 'Convert the still image content to PNG or JPEG.',
+      });
+    }
     return {
       width: metadata.width,
       height: metadata.height,
       format: metadata.format,
     };
   } catch (cause) {
+    if (cause instanceof RendererError) {
+      throw cause;
+    }
     throw mediaError('Could not decode still image.', {
       code: 'media.image_unreadable',
       file: path,

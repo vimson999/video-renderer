@@ -45,8 +45,9 @@ export const runCli = async (
   overrides: Partial<CliDependencies> = {},
 ): Promise<number> => {
   const dependencies = {...defaultDependencies, ...overrides};
+  let command: ReturnType<typeof parseArgs> | undefined;
   try {
-    const command = parseArgs(argv);
+    command = parseArgs(argv);
     if (command.kind === 'help') {
       io.stdout(HELP);
       return 0;
@@ -107,6 +108,26 @@ export const runCli = async (
     }
   } catch (error) {
     if (error instanceof RendererError) {
+      if (command?.kind === 'validate' && command.report) {
+        try {
+          await mkdir(dirname(command.report), {recursive: true});
+          await writeJson(command.report, {
+            schemaVersion: '1.0',
+            valid: false,
+            ...(error.identity ? {identity: error.identity} : {}),
+            issueCount: error.issues.length,
+            warningCount: 0,
+            issues: error.issues,
+            error: {kind: error.kind, message: error.message},
+          });
+        } catch {
+          io.stderr(JSON.stringify({
+            ok: false,
+            error: {kind: 'internal', message: 'Could not write the validation report.'},
+          }));
+          return 1;
+        }
+      }
       io.stderr(JSON.stringify({
         ok: false,
         error: {
@@ -120,8 +141,8 @@ export const runCli = async (
     }
     io.stderr(JSON.stringify({
       ok: false,
-      error: {kind: 'validation', message: 'Unexpected CLI failure.'},
+      error: {kind: 'internal', message: 'Unexpected CLI failure.'},
     }));
-    return 2;
+    return 1;
   }
 };

@@ -15,7 +15,6 @@ import {acquireOutputLock} from './output-lock.js';
 import {publishCompletedDirectory, writeJson} from './publish.js';
 import {
   createRenderReport,
-  hashInputPackage,
   sha256File,
   type RenderReport,
 } from './reports.js';
@@ -57,12 +56,15 @@ const stageExecutable = async (source: string, destination: string): Promise<voi
       await chmod(destination, 0o755);
       return;
     }
-    if (code !== 'EXDEV') {
-      throw error;
+    try {
+      await copyFile(source, destination);
+    } catch (copyError) {
+      throw new Error(`Could not stage executable ${source}.`, {
+        cause: new AggregateError([error, copyError], 'Hard-link and copy staging both failed.'),
+      });
     }
-    await copyFile(source, destination);
+    await chmod(destination, 0o755);
   }
-  await chmod(destination, 0o755);
 };
 
 const preparePinnedBinaries = async (workspace: JobWorkspace): Promise<string> => {
@@ -181,15 +183,19 @@ export const renderJob = async (request: RenderRequest): Promise<RenderResult> =
       });
     }
 
-    const [media, inputPackageSha256, outputSha256] = await Promise.all([
-      probeRenderedVideo(videoPath),
-      hashInputPackage(request.inputDir),
+    const [media, outputSha256] = await Promise.all([
+      probeRenderedVideo(videoPath, {
+        width: request.compiled.width,
+        height: request.compiled.height,
+        fps: request.compiled.fps,
+        durationMs: (request.compiled.durationInFrames / request.compiled.fps) * 1_000,
+      }),
       sha256File(videoPath),
     ]);
     const finishedAt = new Date().toISOString();
     const report = createRenderReport({
       identity: request.compiled.identity,
-      inputPackageSha256,
+      inputPackageSha256: request.workspace.inputPackageSha256,
       outputSha256,
       media,
       concurrency: request.concurrency,

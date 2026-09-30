@@ -58,6 +58,37 @@ describe('validate command', () => {
     expect(captured.stderr.join('\n')).not.toContain('示例字幕');
   });
 
+  it('writes a structured failed report with identity when requested', async () => {
+    const fixture = await createPackageFixture({
+      manifest: {...validManifest, width: 720},
+    });
+    cleanups.push(fixture.cleanup);
+    const reportRoot = await mkdtemp(join(tmpdir(), 'video-renderer-cli-failed-report-'));
+    cleanups.push(() => rm(reportRoot, {recursive: true, force: true}));
+    const report = join(reportRoot, 'nested', 'validation-report.json');
+    const captured = captureIo();
+
+    expect(await runCli(['validate', '--input', fixture.root, '--report', report], captured.io))
+      .toBe(2);
+    expect(JSON.parse(await readFile(report, 'utf8'))).toMatchObject({
+      schemaVersion: '1.0',
+      valid: false,
+      identity: {channelId: 'channel-a', videoId: 'video-a', runId: 'run-a'},
+      issueCount: 1,
+      issues: [expect.objectContaining({file: 'manifest.json', field: '/width'})],
+    });
+  });
+
+  it('maps an unexpected dependency failure to internal exit code 1', async () => {
+    const captured = captureIo();
+    expect(await runCli(['validate', '--input', '/tmp/input'], captured.io, {
+      validate: async () => {
+        throw new Error('unexpected test failure');
+      },
+    })).toBe(1);
+    expect(captured.stderr.join('\n')).toContain('"kind":"internal"');
+  });
+
   it('maps unreadable media to exit code 4', async () => {
     const fixture = await createPackageFixture();
     cleanups.push(fixture.cleanup);

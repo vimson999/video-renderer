@@ -9,6 +9,7 @@ export type CliProcessResult = {
 };
 
 export type RunningCli = {
+  child: ReturnType<typeof spawn>;
   completion: Promise<CliProcessResult>;
 };
 
@@ -39,6 +40,7 @@ export const startCli = (
     stderr += chunk.toString();
   });
   return {
+    child,
     completion: new Promise((resolve, reject) => {
       child.once('error', reject);
       child.once('close', (code) => resolve({code: code ?? 1, stdout, stderr}));

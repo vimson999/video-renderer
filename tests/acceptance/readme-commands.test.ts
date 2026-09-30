@@ -55,7 +55,7 @@ describe('documented quick start', () => {
       readFile(join(process.cwd(), 'docs/cli.md'), 'utf8'),
       readFile(join(process.cwd(), 'docs/troubleshooting.md'), 'utf8'),
     ]);
-    for (const code of [0, 2, 3, 4, 5, 6, 7]) {
+    for (const code of [0, 1, 2, 3, 4, 5, 6, 7]) {
       expect(cli).toMatch(new RegExp(`\\|\\s*${code}\\s*\\|`));
     }
     expect(`${cli}\n${troubleshooting}`).toContain('任务级并行');

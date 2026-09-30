@@ -38,13 +38,14 @@ export type CompiledVideoProps = {
 };
 
 const frameIssue = (
+  file: string,
   code: string,
   field: string,
   shotId: string,
   repair: string,
 ): ValidationIssue => ({
   code,
-  file: 'timeline.json',
+  file,
   field,
   shotId,
   repair,
@@ -59,6 +60,7 @@ export const compilePackage = (input: ValidatedPackage): CompiledVideoProps => {
     const durationInFrames = end - from;
     if (durationInFrames <= 0) {
       issues.push(frameIssue(
+        input.loaded.manifest.timeline,
         'frame.zero_shot',
         `/shots/${index}/endMs`,
         shot.id,
@@ -79,6 +81,7 @@ export const compilePackage = (input: ValidatedPackage): CompiledVideoProps => {
       const transitionFrames = msToFrame(shot.transitionOut.durationMs, fps);
       if (transitionFrames <= 0) {
         issues.push(frameIssue(
+          input.loaded.manifest.timeline,
           'frame.zero_transition',
           `/shots/${index}/transitionOut/durationMs`,
           shot.id,

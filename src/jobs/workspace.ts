@@ -4,6 +4,7 @@ import {dirname, join} from 'node:path';
 import {tmpdir} from 'node:os';
 
 import type {CompiledVideoProps} from '../compiler/compile-package.js';
+import {hashInputPackage} from '../render/reports.js';
 import type {ValidatedPackage} from '../validation/validate-package.js';
 
 export type JobWorkspace = {
@@ -11,6 +12,7 @@ export type JobWorkspace = {
   rootDir: string;
   publicDir: string;
   propsFile: string;
+  inputPackageSha256: string;
   compiled: CompiledVideoProps;
   cleanup(): Promise<void>;
 };
@@ -57,8 +59,10 @@ export const prepareJobWorkspace = async (
     `${sanitize(validated.identity.channelId)}-${sanitize(validated.identity.runId)}-${jobId}`,
   );
   const publicDir = join(rootDir, 'public');
+  const snapshotDir = join(rootDir, 'snapshot');
   const propsFile = join(publicDir, 'compiled.json');
   const staged = stageCompiledProps(compiled);
+  let inputPackageSha256 = '';
   let cleaned = false;
   const cleanup = async (): Promise<void> => {
     if (cleaned) {
@@ -70,6 +74,24 @@ export const prepareJobWorkspace = async (
 
   try {
     await mkdir(publicDir, {recursive: true});
+    await mkdir(snapshotDir, {recursive: true});
+    const snapshotDestinations = new Set<string>();
+    const snapshotFile = async (source: string, logicalPath: string): Promise<void> => {
+      const destination = join(snapshotDir, logicalPath);
+      if (snapshotDestinations.has(destination)) {
+        return;
+      }
+      snapshotDestinations.add(destination);
+      await mkdir(dirname(destination), {recursive: true});
+      await copyFile(source, destination);
+    };
+    await snapshotFile(validated.loaded.files.manifest, 'manifest.json');
+    await snapshotFile(validated.loaded.files.timeline, validated.loaded.manifest.timeline);
+    await snapshotFile(validated.loaded.files.audio, validated.loaded.manifest.audio);
+    await snapshotFile(validated.loaded.files.subtitles, validated.loaded.manifest.subtitles);
+    for (const shot of validated.loaded.timeline.shots) {
+      await snapshotFile(validated.loaded.files.assets.get(shot.id)!, shot.asset);
+    }
     const copiedDestinations = new Set<string>();
     for (const shot of validated.loaded.timeline.shots) {
       const destination = join(publicDir, publicAssetPath(shot.asset));
@@ -87,10 +109,11 @@ export const prepareJobWorkspace = async (
     const temporaryProps = `${propsFile}.${jobId}.tmp`;
     await writeFile(temporaryProps, `${JSON.stringify(staged, null, 2)}\n`);
     await rename(temporaryProps, propsFile);
+    inputPackageSha256 = await hashInputPackage(snapshotDir);
   } catch (error) {
     await cleanup();
     throw error;
   }
 
-  return {jobId, rootDir, publicDir, propsFile, compiled: staged, cleanup};
+  return {jobId, rootDir, publicDir, propsFile, inputPackageSha256, compiled: staged, cleanup};
 };

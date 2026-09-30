@@ -1,6 +1,6 @@
 import type {Manifest, Timeline} from './schema.js';
 
-export type RendererExitCode = 0 | 2 | 3 | 4 | 5 | 6 | 7;
+export type RendererExitCode = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export type RendererIdentity = {
   channelId: string;
