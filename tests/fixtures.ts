@@ -73,7 +73,9 @@ export const makePcmWav = (options?: {
 export const createPackageFixture = async (options?: {
   manifest?: JsonObject;
   timeline?: JsonObject;
+  durationMs?: number;
 }): Promise<PackageFixture> => {
+  const durationMs = options?.durationMs ?? 1_000;
   const root = await mkdtemp(join(tmpdir(), 'video-renderer-package-'));
   await mkdir(join(root, 'assets'));
   await Promise.all([
@@ -85,10 +87,10 @@ export const createPackageFixture = async (options?: {
       join(root, 'timeline.json'),
       `${JSON.stringify(options?.timeline ?? validTimeline, null, 2)}\n`,
     ),
-    writeFile(join(root, 'narration.wav'), makePcmWav()),
+    writeFile(join(root, 'narration.wav'), makePcmWav({durationMs})),
     writeFile(
       join(root, 'subtitle.srt'),
-      '1\n00:00:00,000 --> 00:00:01,000\n示例字幕\n',
+      `1\n00:00:00,000 --> 00:00:${String(Math.floor(durationMs / 1_000)).padStart(2, '0')},${String(durationMs % 1_000).padStart(3, '0')}\n示例字幕\n`,
     ),
     writeFile(join(root, 'assets/shot-001.png'), onePixelPng),
   ]);
