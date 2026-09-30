@@ -3,7 +3,7 @@ import {join} from 'node:path';
 
 import {Ajv2020, type ErrorObject, type ValidateFunction} from 'ajv/dist/2020.js';
 
-import {contractError, RendererError} from './errors.js';
+import {attachIdentity, contractError, RendererError} from './errors.js';
 import {resolvePackageFile} from './paths.js';
 import {
   ManifestSchema,
@@ -104,45 +104,54 @@ export const loadPackage = async (inputDir: string): Promise<LoadedPackage> => {
     validateManifest,
     'manifest.json',
   );
-  const timelinePath = await resolveReference(
-    root,
-    manifest.timeline,
-    'manifest.json',
-    '/timeline',
-  );
-  const timeline = assertSchema(
-    await readJson(timelinePath, manifest.timeline),
-    validateTimeline,
-    'timeline.json',
-  );
-
-  const [audio, subtitles, assetEntries] = await Promise.all([
-    resolveReference(root, manifest.audio, 'manifest.json', '/audio'),
-    resolveReference(root, manifest.subtitles, 'manifest.json', '/subtitles'),
-    Promise.all(
-      timeline.shots.map(async (shot, index) => [
-        shot.id,
-        await resolveReference(
-          root,
-          shot.asset,
-          'timeline.json',
-          `/shots/${index}/asset`,
-          shot.id,
-        ),
-      ] as const),
-    ),
-  ]);
-
-  return {
-    root,
-    manifest,
-    timeline,
-    files: {
-      manifest: manifestPath,
-      timeline: timelinePath,
-      audio,
-      subtitles,
-      assets: new Map(assetEntries),
-    },
+  const identity = {
+    channelId: manifest.channelId,
+    videoId: manifest.videoId,
+    runId: manifest.runId,
   };
+  try {
+    const timelinePath = await resolveReference(
+      root,
+      manifest.timeline,
+      'manifest.json',
+      '/timeline',
+    );
+    const timeline = assertSchema(
+      await readJson(timelinePath, manifest.timeline),
+      validateTimeline,
+      'timeline.json',
+    );
+
+    const [audio, subtitles, assetEntries] = await Promise.all([
+      resolveReference(root, manifest.audio, 'manifest.json', '/audio'),
+      resolveReference(root, manifest.subtitles, 'manifest.json', '/subtitles'),
+      Promise.all(
+        timeline.shots.map(async (shot, index) => [
+          shot.id,
+          await resolveReference(
+            root,
+            shot.asset,
+            'timeline.json',
+            `/shots/${index}/asset`,
+            shot.id,
+          ),
+        ] as const),
+      ),
+    ]);
+
+    return {
+      root,
+      manifest,
+      timeline,
+      files: {
+        manifest: manifestPath,
+        timeline: timelinePath,
+        audio,
+        subtitles,
+        assets: new Map(assetEntries),
+      },
+    };
+  } catch (error) {
+    throw attachIdentity(error, identity);
+  }
 };
