@@ -1,0 +1,22 @@
+{
+  "shots": [
+    {
+      "id": "shot-001",
+      "startMs": 0,
+      "endMs": 1500,
+      "asset": "assets/shot-001.png",
+      "fit": "cover",
+      "motion": {"preset": "slow-zoom-in", "intensity": 0.08},
+      "transitionOut": {"type": "crossfade", "durationMs": 300}
+    },
+    {
+      "id": "shot-002",
+      "startMs": 1500,
+      "endMs": 3000,
+      "asset": "assets/shot-002.png",
+      "fit": "cover",
+      "motion": {"preset": "pan-left", "intensity": 0.06},
+      "transitionOut": {"type": "cut", "durationMs": 0}
+    }
+  ]
+}

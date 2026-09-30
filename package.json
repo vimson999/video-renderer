@@ -16,6 +16,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "cli": "tsx src/index.ts",
+    "example:assets": "tsx scripts/create-example-assets.ts",
     "schemas": "tsx src/contracts/export-schemas.ts"
   },
   "dependencies": {
